@@ -7,9 +7,10 @@ The initial catalog intentionally avoids a database, filesystem-derived hierarch
 ## Goals / Non-Goals
 
 **Goals:**
-- Define a Pydantic model for a base symbol catalog entry.
+- Define a Pydantic `Symbol` model in `symbols.models`.
 - Support entries with `ticker`, `type`, and `contracts`.
 - Validate a small fixed set of instrument types: `INDEX`, `ETF`, `STOCK`, `FUTURE`, and `OPTION`.
+- Provide `load_symbols` for loading a JSON array of symbols from a file path.
 - Keep option strikes, option rights, futures expiry details, and historical data outside the base catalog.
 - Allow `contracts` to reference future CSV-backed data files by name.
 
@@ -24,13 +25,13 @@ The initial catalog intentionally avoids a database, filesystem-derived hierarch
 
 ### Use JSON as the catalog source of truth
 
-The catalog will be represented as a JSON array of symbol entries. This is easier to edit manually than a single wide CSV while remaining simple to load, diff, and validate.
+The catalog will be represented as a JSON array of symbols. This is easier to edit manually than a single wide CSV while remaining simple to load, diff, and validate.
 
 Alternative considered: CSV. CSV is compact, but nested lists like `contracts` become awkward and require custom parsing conventions.
 
 ### Use Pydantic for validation
 
-Each catalog entry will be represented by a Pydantic model. This gives runtime validation for required fields, supported instrument types, and `contracts` list shape without building a database layer.
+Each symbol will be represented by the Pydantic `Symbol` model. This gives runtime validation for required fields, supported instrument types, and `contracts` list shape without building a database layer.
 
 Alternative considered: dataclasses only. Dataclasses are lighter but would require separate validation code.
 

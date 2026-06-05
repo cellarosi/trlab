@@ -1,0 +1,22 @@
+[
+  {
+    "ticker": "SPX",
+    "type": "INDEX",
+    "contracts": []
+  },
+  {
+    "ticker": "SPY",
+    "type": "ETF",
+    "contracts": ["SPY"]
+  },
+  {
+    "ticker": "ES",
+    "type": "FUTURE",
+    "contracts": ["ESZ5", "ESH6"]
+  },
+  {
+    "ticker": "SPY",
+    "type": "OPTION",
+    "contracts": ["SPY20260320"]
+  }
+]
