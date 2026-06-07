@@ -14,9 +14,11 @@ from feed.errors import (
     UnsupportedCapabilityError,
     UnsupportedInstrumentError,
 )
+from feed.models import Bar, OptionChain, OptionContract, OptionRight
 from feed.yahoo import YahooFeed
 
 __all__ = [
+    "Bar",
     "DataFeed",
     "DataFeedAuthenticationError",
     "DataFeedError",
@@ -25,6 +27,9 @@ __all__ = [
     "EntitlementError",
     "MissingProviderMappingError",
     "NetworkError",
+    "OptionChain",
+    "OptionContract",
+    "OptionRight",
     "NormalizationError",
     "RateLimitError",
     "UnsupportedCapabilityError",

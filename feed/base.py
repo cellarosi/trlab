@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
 
 from symbols.models import Symbol
 
 from feed.errors import UnsupportedCapabilityError
+from feed.models import Bar, OptionChain
 
 
 DateLike = date | datetime
@@ -36,7 +36,7 @@ class DataFeed:
         self,
         symbol: Symbol,
         interval: str | None = None,
-    ) -> Any:
+    ) -> Bar:
         """Return the current bar for a symbol."""
 
         raise UnsupportedCapabilityError.for_operation(type(self).__name__, "get_current_bar")
@@ -45,7 +45,7 @@ class DataFeed:
         self,
         symbol: Symbol,
         expiration: date | None = None,
-    ) -> Any:
+    ) -> OptionChain:
         """Return the current option chain for a symbol."""
 
         raise UnsupportedCapabilityError.for_operation(
@@ -58,7 +58,7 @@ class DataFeed:
         start: DateLike,
         end: DateLike,
         interval: str | None = None,
-    ) -> Any:
+    ) -> list[Bar]:
         """Return historical bars for a symbol and date/time range."""
 
         raise UnsupportedCapabilityError.for_operation(type(self).__name__, "get_historical_bars")
@@ -68,7 +68,7 @@ class DataFeed:
         symbol: Symbol,
         as_of: DateLike,
         expiration: date | None = None,
-    ) -> Any:
+    ) -> OptionChain:
         """Return a historical option chain for a symbol as of a date/time."""
 
         raise UnsupportedCapabilityError.for_operation(
