@@ -6,9 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from symbols.models import Symbol
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OptionRight(str, Enum):
@@ -23,7 +21,7 @@ class Bar(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    symbol: Symbol
+    ticker: str
     timestamp: datetime
     open: Decimal
     high: Decimal
@@ -32,14 +30,22 @@ class Bar(BaseModel):
     volume: Decimal = Field(ge=0)
     interval: str | None = None
 
+    @field_validator("ticker")
+    @classmethod
+    def ticker_must_be_non_empty(cls, value: str) -> str:
+        ticker = value.strip()
+        if not ticker:
+            raise ValueError("ticker must be non-empty")
+        return ticker
+
 
 class OptionContract(BaseModel):
     """One normalized call or put option-chain contract row."""
 
     model_config = ConfigDict(extra="forbid")
 
-    underlying_symbol: Symbol
-    option_symbol: str
+    underlying_ticker: str
+    option_ticker: str
     expiration: date
     strike: Decimal
     right: OptionRight
@@ -55,13 +61,29 @@ class OptionContract(BaseModel):
     volume: int | None = Field(default=None, ge=0)
     open_interest: int | None = Field(default=None, ge=0)
 
+    @field_validator("underlying_ticker", "option_ticker")
+    @classmethod
+    def tickers_must_be_non_empty(cls, value: str) -> str:
+        ticker = value.strip()
+        if not ticker:
+            raise ValueError("ticker fields must be non-empty")
+        return ticker
+
 
 class OptionChain(BaseModel):
     """Provider-independent option chain for an underlying symbol."""
 
     model_config = ConfigDict(extra="forbid")
 
-    underlying_symbol: Symbol
+    underlying_ticker: str
     as_of: datetime
     expiration: date | None = None
     contracts: list[OptionContract] = Field(default_factory=list)
+
+    @field_validator("underlying_ticker")
+    @classmethod
+    def underlying_ticker_must_be_non_empty(cls, value: str) -> str:
+        ticker = value.strip()
+        if not ticker:
+            raise ValueError("underlying_ticker must be non-empty")
+        return ticker

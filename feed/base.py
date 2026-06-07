@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from symbols.models import Symbol
-
 from feed.errors import UnsupportedCapabilityError
 from feed.models import Bar, OptionChain
 
@@ -34,19 +32,19 @@ class DataFeed:
 
     async def get_current_bar(
         self,
-        symbol: Symbol,
+        ticker: str,
         interval: str | None = None,
     ) -> Bar:
-        """Return the current bar for a symbol."""
+        """Return the current bar for a provider-ready ticker."""
 
         raise UnsupportedCapabilityError.for_operation(type(self).__name__, "get_current_bar")
 
     async def get_current_option_chain(
         self,
-        symbol: Symbol,
+        ticker: str,
         expiration: date | None = None,
     ) -> OptionChain:
-        """Return the current option chain for a symbol."""
+        """Return the current option chain for a provider-ready underlying ticker."""
 
         raise UnsupportedCapabilityError.for_operation(
             type(self).__name__, "get_current_option_chain"
@@ -54,22 +52,22 @@ class DataFeed:
 
     async def get_historical_bars(
         self,
-        symbol: Symbol,
+        ticker: str,
         start: DateLike,
         end: DateLike,
         interval: str | None = None,
     ) -> list[Bar]:
-        """Return historical bars for a symbol and date/time range."""
+        """Return historical bars for a provider-ready ticker and date/time range."""
 
         raise UnsupportedCapabilityError.for_operation(type(self).__name__, "get_historical_bars")
 
     async def get_historical_option_chain(
         self,
-        symbol: Symbol,
+        ticker: str,
         as_of: DateLike,
         expiration: date | None = None,
     ) -> OptionChain:
-        """Return a historical option chain for a symbol as of a date/time."""
+        """Return a historical option chain for a provider-ready ticker as of a date/time."""
 
         raise UnsupportedCapabilityError.for_operation(
             type(self).__name__, "get_historical_option_chain"
