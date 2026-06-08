@@ -15,6 +15,7 @@ from feed.errors import (
     UnsupportedInstrumentError,
 )
 from feed.models import Bar, OptionChain, OptionContract, OptionRight
+from feed.tiingo import TiingoFeed
 from feed.yahoo import YahooFeed
 
 __all__ = [
@@ -34,5 +35,6 @@ __all__ = [
     "RateLimitError",
     "UnsupportedCapabilityError",
     "UnsupportedInstrumentError",
+    "TiingoFeed",
     "YahooFeed",
 ]
