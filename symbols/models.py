@@ -7,7 +7,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, field_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 
 class InstrumentType(str, Enum):
@@ -20,6 +20,30 @@ class InstrumentType(str, Enum):
     OPTION = "OPTION"
 
 
+class SessionDay(BaseModel):
+    """Represents trading hours for a specific day."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+
+class Sessions(BaseModel):
+    """Represents trading sessions for a symbol."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timezone: str
+    monday: SessionDay | None = None
+    tuesday: SessionDay | None = None
+    wednesday: SessionDay | None = None
+    thursday: SessionDay | None = None
+    friday: SessionDay | None = None
+    saturday: SessionDay | None = None
+    sunday: SessionDay | None = None
+
+
 class Symbol(BaseModel):
     """A minimal financial instrument root/product."""
 
@@ -28,6 +52,7 @@ class Symbol(BaseModel):
     ticker: str
     type: InstrumentType
     contracts: list[str]
+    sessions: Sessions
 
     @field_validator("ticker")
     @classmethod
