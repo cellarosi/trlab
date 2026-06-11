@@ -20,6 +20,7 @@ class DataFeed:
             "get_current_option_chain",
             "get_historical_bars",
             "get_historical_option_chain",
+            "get_option_expirations",
         }
     )
 
@@ -71,4 +72,10 @@ class DataFeed:
 
         raise UnsupportedCapabilityError.for_operation(
             type(self).__name__, "get_historical_option_chain"
+        )
+
+    async def get_option_expirations(self, ticker: str) -> list[date]:
+        """Return the list of available option expiration dates for a ticker."""
+        raise UnsupportedCapabilityError.for_operation(
+            type(self).__name__, "get_option_expirations"
         )

@@ -83,6 +83,17 @@ class YahooFeed(DataFeed):
             for timestamp, row in self._iter_rows(data)
         ]
 
+    async def get_option_expirations(self, ticker: str) -> list[date]:
+        """Return the list of available Yahoo option expiration dates for a ticker."""
+        normalized_ticker = self._validate_ticker(ticker)
+        client = self._client_for(normalized_ticker)
+        options = self._call_provider(lambda: getattr(client, "options", None))
+        
+        if not options:
+            raise DataUnavailableError(f"No Yahoo option expirations available for {normalized_ticker}")
+            
+        return [self._parse_date(exp) for exp in options]
+
     @staticmethod
     def _validate_ticker(ticker: str) -> str:
         """Normalize and reject blank provider-ready tickers."""
