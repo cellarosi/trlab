@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-import socket
-from collections.abc import Callable
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, quote
-from urllib.request import Request, urlopen
+
+import aiohttp
 
 from feed.base import DataFeed, DateLike
 from feed.errors import (
@@ -27,9 +26,6 @@ from feed.errors import (
 from feed.models import Bar
 
 
-UrlOpen = Callable[..., Any]
-
-
 class TiingoFeed(DataFeed):
     """Tiingo provider feed for authenticated end-of-day OHLCV bars."""
 
@@ -41,20 +37,31 @@ class TiingoFeed(DataFeed):
         *,
         base_url: str = _default_base_url,
         timeout: float = 30.0,
-        opener: UrlOpen | None = None,
+        client: aiohttp.ClientSession | None = None,
     ) -> None:
         self._api_token = api_token.strip()
         if not self._api_token:
             raise DataFeedAuthenticationError("Tiingo API token is required")
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
-        self._opener = opener or urlopen
+        self._client = client
+        self._owns_client = client is None
+
+    async def __aenter__(self) -> "TiingoFeed":
+        if self._owns_client:
+            timeout = aiohttp.ClientTimeout(total=self._timeout)
+            self._client = aiohttp.ClientSession(timeout=timeout)
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self._owns_client and self._client is not None:
+            await self._client.close()
 
     async def get_current_bar(self, ticker: str, interval: str | None = None) -> Bar:
         """Return the latest available Tiingo EOD bar as a standard Bar."""
 
         normalized_ticker = self._validate_ticker(ticker)
-        rows = self._request_prices(normalized_ticker, interval=interval)
+        rows = await self._request_prices(normalized_ticker, interval=interval)
         row = self._latest_row(rows, normalized_ticker)
         return self._bar_from_row(normalized_ticker, row, interval)
 
@@ -68,7 +75,7 @@ class TiingoFeed(DataFeed):
         """Return Tiingo historical EOD bars as standard Bar rows."""
 
         normalized_ticker = self._validate_ticker(ticker)
-        rows = self._request_prices(
+        rows = await self._request_prices(
             normalized_ticker,
             start=start,
             end=end,
@@ -87,7 +94,7 @@ class TiingoFeed(DataFeed):
             raise MissingProviderMappingError("ticker must be non-empty")
         return normalized_ticker
 
-    def _request_prices(
+    async def _request_prices(
         self,
         ticker: str,
         *,
@@ -97,20 +104,20 @@ class TiingoFeed(DataFeed):
     ) -> list[dict[str, Any]]:
         """Fetch Tiingo EOD price rows for one ticker."""
 
+        if self._client is None:
+            raise NetworkError("Tiingo client is not initialized. Use 'async with' or provide a client.")
+        
         params: dict[str, str] = {"resampleFreq": self._resample_frequency(interval)}
         if start is not None:
             params["startDate"] = self._date_param(start)
         if end is not None:
             params["endDate"] = self._date_param(end)
         url = self._prices_url(ticker, params)
-        request = Request(
-            url,
-            headers={
-                "Authorization": f"Token {self._api_token}",
-                "Content-Type": "application/json",
-            },
-        )
-        payload = self._request_json(request)
+        headers = {
+            "Authorization": f"Token {self._api_token}",
+            "Content-Type": "application/json",
+        }
+        payload = await self._request_json(url, headers)
         if not isinstance(payload, list):
             raise NormalizationError("Tiingo price payload must be a list")
         return [self._row_dict(row) for row in payload]
@@ -135,24 +142,26 @@ class TiingoFeed(DataFeed):
             return value.date().isoformat()
         return value.isoformat()
 
-    def _request_json(self, request: Request) -> Any:
+    async def _request_json(self, url: str, headers: dict[str, str]) -> Any:
         """Run a Tiingo HTTP request and parse JSON with normalized errors."""
 
+        if self._client is None:
+            raise NetworkError("Tiingo client is not initialized. Use 'async with' or provide a client.")
+
         try:
-            with self._opener(request, timeout=self._timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise self._error_for_status(exc.code) from exc
-        except (TimeoutError, socket.timeout) as exc:
+            async with self._client.get(url, headers=headers) as response:
+                if response.status >= 400:
+                    raise self._error_for_status(response.status)
+                text = await response.text()
+                return json.loads(text)
+        except DataFeedError:
+            raise
+        except asyncio.TimeoutError as exc:
             raise DataFeedTimeoutError("Tiingo provider request timed out") from exc
-        except URLError as exc:
-            if isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout)):
-                raise DataFeedTimeoutError("Tiingo provider request timed out") from exc
+        except aiohttp.ClientError as exc:
             raise NetworkError("Tiingo provider request failed") from exc
         except json.JSONDecodeError as exc:
             raise NormalizationError("Tiingo provider returned invalid JSON") from exc
-        except DataFeedError:
-            raise
         except Exception as exc:
             raise NetworkError("Tiingo provider request failed") from exc
 

@@ -20,6 +20,7 @@ Design Rationale:
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 from collections.abc import Callable, Iterable
 from datetime import date, datetime, timezone
@@ -44,8 +45,8 @@ class YahooFeed(DataFeed):
     async def get_current_bar(self, ticker: str, interval: str | None = None) -> Bar:
         """Return Yahoo delayed/current bar data as a standard Bar."""
         normalized_ticker = self._validate_ticker(ticker)
-        client = self._client_for(normalized_ticker)
-        data = self._call_provider(
+        client = await self._client_for(normalized_ticker)
+        data = await self._call_provider(
             lambda: client.history(period="1d", interval=interval or "1d")
         )
         row, timestamp = self._latest_row(data, normalized_ticker)
@@ -56,9 +57,9 @@ class YahooFeed(DataFeed):
     ) -> OptionChain:
         """Return Yahoo current option-chain data as a standard OptionChain."""
         normalized_ticker = self._validate_ticker(ticker)
-        client = self._client_for(normalized_ticker)
-        selected_expiration = self._resolve_option_expiration(client, expiration)
-        data = self._call_provider(
+        client = await self._client_for(normalized_ticker)
+        selected_expiration = await self._resolve_option_expiration(client, expiration)
+        data = await self._call_provider(
             lambda: client.option_chain(selected_expiration.isoformat())
         )
         contracts = [
@@ -87,8 +88,8 @@ class YahooFeed(DataFeed):
     ) -> list[Bar]:
         """Return Yahoo historical bars as standard Bar rows."""
         normalized_ticker = self._validate_ticker(ticker)
-        client = self._client_for(normalized_ticker)
-        data = self._call_provider(
+        client = await self._client_for(normalized_ticker)
+        data = await self._call_provider(
             lambda: client.history(start=start, end=end, interval=interval or "1d")
         )
         if self._is_empty(data):
@@ -101,8 +102,8 @@ class YahooFeed(DataFeed):
     async def get_option_expirations(self, ticker: str) -> list[date]:
         """Return the list of available Yahoo option expiration dates for a ticker."""
         normalized_ticker = self._validate_ticker(ticker)
-        client = self._client_for(normalized_ticker)
-        options = self._call_provider(lambda: getattr(client, "options", None))
+        client = await self._client_for(normalized_ticker)
+        options = await self._call_provider(lambda: getattr(client, "options", None))
         
         if not options:
             raise DataUnavailableError(f"No Yahoo option expirations available for {normalized_ticker}")
@@ -117,7 +118,7 @@ class YahooFeed(DataFeed):
             raise MissingProviderMappingError("ticker must be non-empty")
         return normalized_ticker
 
-    def _client_for(self, ticker: str) -> Any:
+    async def _client_for(self, ticker: str) -> Any:
         """Create the Yahoo client lazily so importing feed stays provider-light.
         
         Why this is here: If a user only imports `feed` and uses `TiingoFeed`, 
@@ -128,10 +129,10 @@ class YahooFeed(DataFeed):
             yf = importlib.import_module("yfinance")
         except ImportError as exc:
             raise DataFeedError("Yahoo provider dependency is not installed") from exc
-        return self._call_provider(lambda: yf.Ticker(ticker))
+        return await self._call_provider(lambda: yf.Ticker(ticker))
 
     @staticmethod
-    def _call_provider(call: Callable[[], Any]) -> Any:
+    async def _call_provider(call: Callable[[], Any]) -> Any:
         """Run a Yahoo call and expose only normalized feed-layer errors.
         
         This wrapper is critical: it catches low-level network or timeout issues 
@@ -139,7 +140,7 @@ class YahooFeed(DataFeed):
         ensuring the application never sees raw `yfinance` or HTTP exceptions.
         """
         try:
-            return call()
+            return await asyncio.to_thread(call)
         except TimeoutError as exc:
             raise DataFeedTimeoutError("Yahoo provider request timed out") from exc
         except DataFeedError:
@@ -209,11 +210,11 @@ class YahooFeed(DataFeed):
         except Exception as exc:
             raise NormalizationError(f"Cannot normalize Yahoo bar for {ticker}") from exc
 
-    def _resolve_option_expiration(self, client: Any, expiration: date | None) -> date:
+    async def _resolve_option_expiration(self, client: Any, expiration: date | None) -> date:
         """Use the requested option expiration or Yahoo's first available one."""
         if expiration is not None:
             return expiration
-        options = self._call_provider(lambda: getattr(client, "options", None))
+        options = await self._call_provider(lambda: getattr(client, "options", None))
         if not options:
             raise DataUnavailableError("No Yahoo option expirations are available")
         return self._parse_date(options[0])
