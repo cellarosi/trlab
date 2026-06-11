@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from decimal import Decimal
+import asyncio
 import inspect
 import json
-from types import SimpleNamespace
 import sys
 import unittest
-from unittest.mock import patch
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any, get_type_hints
-from urllib.error import HTTPError, URLError
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+import aiohttp
 import pandas as pd
 from pydantic import ValidationError
 
@@ -394,50 +395,55 @@ class YahooFeedTests(unittest.IsolatedAsyncioTestCase):
             await self.yahoo_feed.get_current_bar("SPY")
 
 
-class FakeTiingoResponse:
-    """Small context-manager response matching urllib response behavior."""
+class MockAiohttpResponse:
+    """Small async context-manager response matching aiohttp response behavior."""
 
-    def __init__(self, payload: Any) -> None:
-        self.payload = payload
+    def __init__(self, status: int, text_data: str) -> None:
+        self.status = status
+        self._text_data = text_data
 
-    def __enter__(self) -> "FakeTiingoResponse":
+    async def __aenter__(self) -> "MockAiohttpResponse":
         return self
 
-    def __exit__(self, *_: Any) -> None:
+    async def __aexit__(self, *_: Any) -> None:
         return None
 
-    def read(self) -> bytes:
-        if isinstance(self.payload, bytes):
-            return self.payload
-        return json.dumps(self.payload).encode("utf-8")
+    async def text(self) -> str:
+        return self._text_data
 
 
-class FakeTiingoOpener:
+class MockAiohttpClient:
     """Capture Tiingo requests and return configured fake payloads."""
 
-    def __init__(self, payload: Any = None, exception: Exception | None = None) -> None:
+    def __init__(self, payload: Any = None, exception: Exception | None = None, status: int = 200) -> None:
         self.payload = payload if payload is not None else []
         self.exception = exception
-        self.requests: list[Any] = []
-        self.timeouts: list[float] = []
+        self.status = status
+        self.requests: list[dict[str, Any]] = []
 
-    def __call__(self, request: Any, *, timeout: float) -> FakeTiingoResponse:
-        self.requests.append(request)
-        self.timeouts.append(timeout)
+    def get(self, url: str, headers: dict[str, str]) -> MockAiohttpResponse:
+        self.requests.append({"url": url, "headers": headers})
         if self.exception is not None:
             raise self.exception
-        return FakeTiingoResponse(self.payload)
+        
+        if isinstance(self.payload, bytes):
+            text_data = self.payload.decode("utf-8")
+        else:
+            text_data = json.dumps(self.payload)
+            
+        return MockAiohttpResponse(self.status, text_data)
 
 
 class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
-    def _feed(self, payload: Any = None, exception: Exception | None = None) -> tuple[TiingoFeed, FakeTiingoOpener]:
-        opener = FakeTiingoOpener(payload=payload, exception=exception)
-        return TiingoFeed(api_token="test-token", opener=opener), opener
+    def _feed(self, payload: Any = None, exception: Exception | None = None, status: int = 200) -> tuple[TiingoFeed, MockAiohttpClient]:
+        client = MockAiohttpClient(payload=payload, exception=exception, status=status)
+        return TiingoFeed(api_token="test-token", client=client), client
 
     async def test_tiingo_feed_is_data_feed_and_keeps_options_unsupported(self) -> None:
         """Verify TiingoFeed implements only Tiingo-supported operations."""
 
-        tiingo_feed = TiingoFeed(api_token="test-token", opener=FakeTiingoOpener())
+        client = MockAiohttpClient()
+        tiingo_feed = TiingoFeed(api_token="test-token", client=client)
 
         self.assertIsInstance(tiingo_feed, DataFeed)
         self.assertTrue(tiingo_feed.supports("get_current_bar"))
@@ -450,22 +456,22 @@ class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
     async def test_explicit_token_is_used_for_requests(self) -> None:
         """Verify explicit Tiingo tokens authenticate requests."""
 
-        tiingo_feed, opener = self._feed([self._bar_payload("2024-01-02T00:00:00Z")])
+        tiingo_feed, client = self._feed([self._bar_payload("2024-01-02T00:00:00Z")])
 
         await tiingo_feed.get_current_bar("SPY")
 
-        self.assertEqual(opener.requests[0].get_header("Authorization"), "Token test-token")
+        self.assertEqual(client.requests[0]["headers"]["Authorization"], "Token test-token")
 
     def test_blank_constructor_token_raises_authentication_error(self) -> None:
         """Verify TiingoFeed requires an explicit non-empty constructor token."""
 
         with self.assertRaises(DataFeedAuthenticationError):
-            TiingoFeed(api_token="   ", opener=FakeTiingoOpener())
+            TiingoFeed(api_token="   ", client=MockAiohttpClient())
 
     async def test_current_bar_returns_latest_standard_bar(self) -> None:
         """Verify Tiingo current bars use the newest available EOD row."""
 
-        tiingo_feed, opener = self._feed(
+        tiingo_feed, client = self._feed(
             [
                 self._bar_payload("2024-01-02T00:00:00Z", close=471),
                 self._bar_payload("2024-01-03T00:00:00Z", close=472.5),
@@ -474,7 +480,7 @@ class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
 
         bar = await tiingo_feed.get_current_bar(" SPY ", interval="weekly")
 
-        query = parse_qs(urlparse(opener.requests[0].full_url).query)
+        query = parse_qs(urlparse(client.requests[0]["url"]).query)
         self.assertEqual(query["resampleFreq"], ["weekly"])
         self.assertEqual(bar.ticker, "SPY")
         self.assertEqual(bar.close, Decimal("472.5"))
@@ -483,7 +489,7 @@ class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
     async def test_historical_bars_return_standard_bar_list_and_date_params(self) -> None:
         """Verify Tiingo historical rows and query bounds are normalized."""
 
-        tiingo_feed, opener = self._feed(
+        tiingo_feed, client = self._feed(
             [
                 self._bar_payload("2024-01-02T00:00:00Z", close=471),
                 self._bar_payload("2024-01-03T00:00:00Z", close=472),
@@ -494,7 +500,7 @@ class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
             "SPY", date(2024, 1, 2), datetime(2024, 1, 4, tzinfo=timezone.utc)
         )
 
-        query = parse_qs(urlparse(opener.requests[0].full_url).query)
+        query = parse_qs(urlparse(client.requests[0]["url"]).query)
         self.assertEqual(query["startDate"], ["2024-01-02"])
         self.assertEqual(query["endDate"], ["2024-01-04"])
         self.assertEqual(query["resampleFreq"], ["daily"])
@@ -539,23 +545,20 @@ class TiingoFeedTests(unittest.IsolatedAsyncioTestCase):
         ]
         for status, expected_error in cases:
             with self.subTest(status=status):
-                error = HTTPError("https://api.tiingo.test", status, "failed", hdrs=None, fp=None)
-                tiingo_feed, _ = self._feed(exception=error)
+                tiingo_feed, _ = self._feed(status=status)
                 with self.assertRaises(expected_error):
                     await tiingo_feed.get_current_bar("SPY")
 
     async def test_network_and_timeout_errors_are_normalized(self) -> None:
         """Verify Tiingo network and timeout failures are normalized."""
 
-        timeout_feed, _ = self._feed(exception=TimeoutError("slow"))
+        import aiohttp
+
+        timeout_feed, _ = self._feed(exception=asyncio.TimeoutError("slow"))
         with self.assertRaises(DataFeedTimeoutError):
             await timeout_feed.get_current_bar("SPY")
 
-        url_timeout_feed, _ = self._feed(exception=URLError(TimeoutError("slow")))
-        with self.assertRaises(DataFeedTimeoutError):
-            await url_timeout_feed.get_current_bar("SPY")
-
-        network_feed, _ = self._feed(exception=URLError("offline"))
+        network_feed, _ = self._feed(exception=aiohttp.ClientError("offline"))
         with self.assertRaises(NetworkError):
             await network_feed.get_current_bar("SPY")
 
