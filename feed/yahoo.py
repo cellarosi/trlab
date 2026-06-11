@@ -124,6 +124,10 @@ class YahooFeed(DataFeed):
         Why this is here: If a user only imports `feed` and uses `TiingoFeed`, 
         `yfinance` is never loaded into memory, speeding up startup and avoiding 
         unnecessary dependency errors if `yfinance` isn't installed.
+        
+        Async Rationale: This method is async because it wraps the client creation 
+        in `self._call_provider`, which offloads the synchronous `yfinance` 
+        instantiation to a background thread to prevent blocking the event loop.
         """
         try:
             yf = importlib.import_module("yfinance")
@@ -138,6 +142,12 @@ class YahooFeed(DataFeed):
         This wrapper is critical: it catches low-level network or timeout issues 
         and translates them into domain-specific `DataFeedError` subtypes, 
         ensuring the application never sees raw `yfinance` or HTTP exceptions.
+        
+        Async Rationale: `yfinance` is inherently synchronous and blocks the event loop.
+        We use `asyncio.to_thread(call)` to offload the blocking synchronous lambda 
+        execution to a background worker thread, keeping the main `asyncio` event loop 
+        responsive. The lambda passed here should remain lightweight to avoid 
+        serialization overhead in the thread pool.
         """
         try:
             return await asyncio.to_thread(call)

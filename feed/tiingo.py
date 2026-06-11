@@ -1,4 +1,19 @@
-"""Tiingo end-of-day market data feed adapter."""
+"""Tiingo end-of-day market data feed adapter.
+
+Design Rationale:
+- Replaced the synchronous `urllib.request` stack with `aiohttp.ClientSession` 
+  to ensure true asynchronous, non-blocking I/O.
+- Client Ownership: The feed accepts an optional `aiohttp.ClientSession` for 
+  dependency injection (useful for testing or shared sessions). If not provided, 
+  it lazily creates and owns its own session.
+- Lifecycle Management: Implements `__aenter__` and `__aexit__` to cleanly close 
+  the internally created `aiohttp.ClientSession` and prevent resource leaks, 
+  enabling safe `async with TiingoFeed(...) as feed:` usage.
+- Error Mapping: Adapts the existing robust exception normalization (e.g., 
+  `NormalizationError`, `DataUnavailableError`) to map `aiohttp` specific 
+  exceptions (`aiohttp.ClientError`, `asyncio.TimeoutError`) to the canonical 
+  `DataFeedError` subtypes.
+"""
 
 from __future__ import annotations
 
@@ -45,15 +60,20 @@ class TiingoFeed(DataFeed):
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._client = client
+        # Track whether the http client was injected by the caller or created internally.
+        # We only call `await client.close()` in `__aexit__` if the feed owns the client, 
+        # preventing accidental closure of a shared, externally managed client.
         self._owns_client = client is None
 
     async def __aenter__(self) -> "TiingoFeed":
+        """Async context manager entry. Creates internal client if not injected."""
         if self._owns_client:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
             self._client = aiohttp.ClientSession(timeout=timeout)
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit. Cleans up internal client to prevent leaks."""
         if self._owns_client and self._client is not None:
             await self._client.close()
 
