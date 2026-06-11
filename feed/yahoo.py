@@ -1,4 +1,22 @@
-"""Yahoo market data feed adapter."""
+"""
+Yahoo market data feed adapter.
+
+Design Rationale:
+- Implements the `DataFeed` contract specifically for Yahoo Finance via `yfinance`.
+- Operates strictly on "provider-ready" ticker strings, delegating any symbol 
+  resolution/catalog mapping to the caller.
+- Lazily imports `yfinance` inside `_client_for` to ensure the base `feed` package 
+  remains "provider-light" and doesn't force a heavy dependency on environments 
+  that might only use other providers (like Tiingo).
+- Normalizes all raw provider payloads into the strict, canonical `Bar` and 
+  `OptionChain` models defined in `feed.models`. Any failure to parse or missing 
+  expected fields is caught and re-raised as a normalized `DataFeedError` subtype 
+  (e.g., `NormalizationError`, `DataUnavailableError`), insulating the caller 
+  from Yahoo-specific exceptions or payload quirks.
+- Leaves `get_historical_option_chain` unsupported, relying on the base class's 
+  default `UnsupportedCapabilityError` behavior, as Yahoo's historical options 
+  data via standard `yfinance` is not reliably structured for this use case.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +43,6 @@ class YahooFeed(DataFeed):
 
     async def get_current_bar(self, ticker: str, interval: str | None = None) -> Bar:
         """Return Yahoo delayed/current bar data as a standard Bar."""
-
         normalized_ticker = self._validate_ticker(ticker)
         client = self._client_for(normalized_ticker)
         data = self._call_provider(
@@ -38,7 +55,6 @@ class YahooFeed(DataFeed):
         self, ticker: str, expiration: date | None = None
     ) -> OptionChain:
         """Return Yahoo current option-chain data as a standard OptionChain."""
-
         normalized_ticker = self._validate_ticker(ticker)
         client = self._client_for(normalized_ticker)
         selected_expiration = self._resolve_option_expiration(client, expiration)
@@ -70,7 +86,6 @@ class YahooFeed(DataFeed):
         interval: str | None = None,
     ) -> list[Bar]:
         """Return Yahoo historical bars as standard Bar rows."""
-
         normalized_ticker = self._validate_ticker(ticker)
         client = self._client_for(normalized_ticker)
         data = self._call_provider(
@@ -96,16 +111,19 @@ class YahooFeed(DataFeed):
 
     @staticmethod
     def _validate_ticker(ticker: str) -> str:
-        """Normalize and reject blank provider-ready tickers."""
-
+        """Normalize and reject blank provider-ready tickers early."""
         normalized_ticker = ticker.strip()
         if not normalized_ticker:
             raise MissingProviderMappingError("ticker must be non-empty")
         return normalized_ticker
 
     def _client_for(self, ticker: str) -> Any:
-        """Create the Yahoo client lazily so importing feed stays provider-light."""
-
+        """Create the Yahoo client lazily so importing feed stays provider-light.
+        
+        Why this is here: If a user only imports `feed` and uses `TiingoFeed`, 
+        `yfinance` is never loaded into memory, speeding up startup and avoiding 
+        unnecessary dependency errors if `yfinance` isn't installed.
+        """
         try:
             yf = importlib.import_module("yfinance")
         except ImportError as exc:
@@ -114,13 +132,18 @@ class YahooFeed(DataFeed):
 
     @staticmethod
     def _call_provider(call: Callable[[], Any]) -> Any:
-        """Run a Yahoo call and expose only normalized feed-layer errors."""
-
+        """Run a Yahoo call and expose only normalized feed-layer errors.
+        
+        This wrapper is critical: it catches low-level network or timeout issues 
+        and translates them into domain-specific `DataFeedError` subtypes, 
+        ensuring the application never sees raw `yfinance` or HTTP exceptions.
+        """
         try:
             return call()
         except TimeoutError as exc:
             raise DataFeedTimeoutError("Yahoo provider request timed out") from exc
         except DataFeedError:
+            # Re-raise already normalized errors (like DataUnavailableError)
             raise
         except Exception as exc:
             raise NetworkError("Yahoo provider request failed") from exc
@@ -128,7 +151,6 @@ class YahooFeed(DataFeed):
     @staticmethod
     def _is_empty(data: Any) -> bool:
         """Return whether Yahoo returned no usable rows or payload."""
-
         if data is None:
             return True
         empty = getattr(data, "empty", None)
@@ -141,7 +163,6 @@ class YahooFeed(DataFeed):
 
     def _latest_row(self, data: Any, ticker: str) -> tuple[Any, Any]:
         """Extract the latest Yahoo history row for current-bar normalization."""
-
         if self._is_empty(data):
             raise DataUnavailableError(f"No Yahoo current bar data for {ticker}")
         try:
@@ -159,7 +180,6 @@ class YahooFeed(DataFeed):
     @staticmethod
     def _iter_rows(data: Any) -> Iterable[tuple[Any, Any]]:
         """Yield timestamp and row pairs from dataframe, dict, or iterable data."""
-
         if hasattr(data, "iterrows"):
             yield from data.iterrows()
             return
@@ -173,7 +193,6 @@ class YahooFeed(DataFeed):
         self, ticker: str, row: Any, timestamp: Any, interval: str | None
     ) -> Bar:
         """Convert one Yahoo OHLCV row into the standard Bar model."""
-
         try:
             return Bar(
                 ticker=ticker,
@@ -192,7 +211,6 @@ class YahooFeed(DataFeed):
 
     def _resolve_option_expiration(self, client: Any, expiration: date | None) -> date:
         """Use the requested option expiration or Yahoo's first available one."""
-
         if expiration is not None:
             return expiration
         options = self._call_provider(lambda: getattr(client, "options", None))
@@ -208,7 +226,6 @@ class YahooFeed(DataFeed):
         right: OptionRight,
     ) -> list[OptionContract]:
         """Convert Yahoo call or put rows into standard option contracts."""
-
         if self._is_empty(rows):
             return []
         return [
@@ -224,7 +241,6 @@ class YahooFeed(DataFeed):
         right: OptionRight,
     ) -> OptionContract:
         """Convert one Yahoo option row into the standard OptionContract model."""
-
         try:
             return OptionContract(
                 underlying_ticker=underlying_ticker,
@@ -248,14 +264,12 @@ class YahooFeed(DataFeed):
     @classmethod
     def _required_decimal(cls, row: Any, *names: str) -> Decimal:
         """Read a required Yahoo numeric field as Decimal."""
-
         value = cls._required_value(row, *names)
         return cls._to_decimal(value)
 
     @classmethod
     def _optional_decimal(cls, row: Any, *names: str) -> Decimal | None:
         """Read an optional Yahoo numeric field as Decimal when present."""
-
         value = cls._value(row, *names)
         if cls._is_missing(value):
             return None
@@ -264,7 +278,6 @@ class YahooFeed(DataFeed):
     @classmethod
     def _optional_int(cls, row: Any, *names: str) -> int | None:
         """Read an optional Yahoo numeric field as int when present."""
-
         value = cls._value(row, *names)
         if cls._is_missing(value):
             return None
@@ -273,7 +286,6 @@ class YahooFeed(DataFeed):
     @classmethod
     def _required_value(cls, row: Any, *names: str) -> Any:
         """Read a required Yahoo field, accepting alternate field names."""
-
         value = cls._value(row, *names)
         if cls._is_missing(value):
             raise DataUnavailableError(f"Missing required Yahoo field: {names[0]}")
@@ -282,7 +294,6 @@ class YahooFeed(DataFeed):
     @staticmethod
     def _value(row: Any, *names: str) -> Any:
         """Read the first available field name from a Yahoo row-like object."""
-
         for name in names:
             if hasattr(row, "get"):
                 value = row.get(name)
@@ -294,8 +305,11 @@ class YahooFeed(DataFeed):
 
     @classmethod
     def _to_decimal(cls, value: Any) -> Decimal:
-        """Convert provider numeric values to Decimal for public models."""
-
+        """Convert provider numeric values to Decimal for public models.
+        
+        Why Decimal: Floating point errors accumulate in financial calculations. 
+        Using Decimal ensures exact precision for prices and volumes.
+        """
         if cls._is_missing(value):
             raise DataUnavailableError("Missing numeric Yahoo value")
         try:
@@ -306,13 +320,11 @@ class YahooFeed(DataFeed):
     @staticmethod
     def _is_missing(value: Any) -> bool:
         """Return true for missing values including NaN-like values."""
-
         return value is None or value != value
 
     @staticmethod
     def _timestamp_or_now(value: Any) -> datetime:
         """Normalize Yahoo row timestamps, falling back to current UTC time."""
-
         if value is None:
             return datetime.now(timezone.utc)
         if isinstance(value, datetime):
@@ -328,7 +340,6 @@ class YahooFeed(DataFeed):
     @staticmethod
     def _parse_date(value: Any) -> date:
         """Normalize Yahoo expiration values into date objects."""
-
         if isinstance(value, datetime):
             return value.date()
         if isinstance(value, date):

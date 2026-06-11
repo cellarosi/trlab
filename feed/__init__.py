@@ -1,4 +1,14 @@
-"""Public market data feed API."""
+"""
+Public market data feed API.
+
+Design Rationale:
+- Acts as the public, provider-independent facade for the entire feed package.
+- Intentionally re-exports base classes, models, errors, and concrete feeds.
+- Designed to be "provider-light": importing this module does NOT instantiate 
+  or require third-party provider dependencies (like `yfinance`) until a 
+  specific provider operation is actually invoked, ensuring clean, fast imports 
+  across the application.
+"""
 
 from feed.base import DataFeed
 from feed.errors import (
