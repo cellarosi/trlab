@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 
 CSV_HEADER = "datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,stockPrice"
 
+BUCKET_MINUTES = 1  # change to 5, 15, etc. for coarser granularity
+
 QUANTWHEEL_COOKIE = (
     "_gcl_au=1.1.2141382235.1780555467; "
     "_ga=GA1.1.2048354470.1780555467; "
@@ -21,12 +23,12 @@ QUANTWHEEL_COOKIE = (
 )
 
 
-def get_15min_interval(dt: datetime) -> int:
-    return (dt.minute // 15) * 15
+def get_bucket_interval(dt: datetime) -> int:
+    return (dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES
 
 
-def floor_to_15min(dt: datetime) -> datetime:
-    m = get_15min_interval(dt)
+def floor_to_bucket(dt: datetime) -> datetime:
+    m = get_bucket_interval(dt)
     return dt.replace(minute=m, second=0, microsecond=0)
 
 
@@ -92,7 +94,7 @@ def _is_in_gex_window(now_rome: datetime) -> bool:
 
 def sync_loop(expiration: str, interval_seconds: float = 5.0):
     print(f"Expiration: {expiration}")
-    print(f"Polling every {interval_seconds}s — fetching GEX on new interval")
+    print(f"Bucket: {BUCKET_MINUTES}min  |  Polling every {interval_seconds}s")
     print(f"Window: 15:00–21:45 Europe/Rome\nCtrl+C to stop\n")
     last = None
     try:
@@ -103,7 +105,7 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
                 time.sleep(interval_seconds)
                 continue
             now = datetime.now()
-            floored = floor_to_15min(now)
+            floored = floor_to_bucket(now)
             if floored == last:
                 print(f"[{now:%H:%M:%S}]  same interval ({floored:%H:%M}), waiting...")
                 time.sleep(interval_seconds)

@@ -9,7 +9,7 @@ A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com
 | File | Role |
 |---|---|
 | `scripts/gex_sync.py` | Production code — the polling daemon |
-| `scripts/test_gex_sync.py` | Unit tests — 41 tests, all passing |
+| `scripts/test_gex_sync.py` | Unit tests — 48 tests, all passing |
 | `scripts/GEX.md` | This document |
 
 ## How to run
@@ -49,20 +49,28 @@ The script only fetches data during market hours: **15:00–21:45 Europe/Rome** 
 
 ### Time bucketing
 
-The 15-minute bucket is computed with integer division:
+The bucket size is controlled by `BUCKET_MINUTES` (default 15). Change it to 5 or 1 for finer granularity:
 
 ```python
-(dt.minute // 15) * 15   # → 0, 15, 30, or 45
+BUCKET_MINUTES = 15  # change to 5, 1, etc. for finer granularity
 ```
 
-This replaces an earlier 4-branch `if/elif` chain. Minute 59 correctly floors to 45 (not 60).
+The bucket interval is computed with integer division:
+
+```python
+(dt.minute // BUCKET_MINUTES) * BUCKET_MINUTES
+```
+
+With the default of 1 this yields exact minutes. Minute 59 correctly floors to 59, not 60.
+
+This replaces an earlier 4-branch `if/elif` chain.
 
 ### Dual duplicate guard
 
 Two layers prevent duplicate rows:
 
 1. **In-memory** (`floored == last`): skips the fetch + disk check entirely once we've already seen this interval in the current process. Cheap, no I/O.
-2. **On-disk** (`_already_in_csv`): catches restarts. If the script is killed and relaunched within the same 15-min window, it reads `gex.csv` and skips rows that already exist. More expensive (file read) but only runs once per interval.
+2. **On-disk** (`_already_in_csv`): catches restarts. If the script is killed and relaunched within the same bucket window, it reads `gex.csv` and skips rows that already exist. More expensive (file read) but only runs once per interval.
 
 The `_already_in_csv` check uses `line.startswith(ts)` rather than exact match. This is deliberately loose: `"2026-07-03 10:00:00"` would also match `"2026-07-03 10:00:00.123"` if that ever appeared. In practice `ts` is always in `YYYY-MM-DD HH:MM:SS` format so this only affects same-second collisions (which are fine — they're the same interval).
 

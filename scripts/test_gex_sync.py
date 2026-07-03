@@ -4,103 +4,105 @@ import unittest
 from datetime import datetime
 
 from gex_sync import (
+    BUCKET_MINUTES,
     CSV_HEADER,
     _already_in_csv,
     _format_csv_row,
     _is_in_gex_window,
     build_gex_url,
-    floor_to_15min,
-    get_15min_interval,
+    floor_to_bucket,
+    get_bucket_interval,
     write_gex_csv,
 )
 
 
 # ============================================================
-# get_15min_interval  —  all 4 buckets + boundary edges
+# get_bucket_interval  —  all boundary edges, adapts to BUCKET_MINUTES
 # ============================================================
 
-class TestGet15minInterval(unittest.TestCase):
+class TestGetBucketInterval(unittest.TestCase):
+
+    def _expected(self, minute: int) -> int:
+        return (minute // BUCKET_MINUTES) * BUCKET_MINUTES
 
     def _dt(self, minute: int) -> datetime:
         return datetime(2026, 7, 3, 10, minute, 0)
 
-    # --- bucket 0 (0–14) ---
-    def test_minute_0_returns_0(self):
-        self.assertEqual(get_15min_interval(self._dt(0)), 0)
+    def test_minute_0(self):
+        self.assertEqual(get_bucket_interval(self._dt(0)), self._expected(0))
 
-    def test_minute_7_returns_0(self):
-        self.assertEqual(get_15min_interval(self._dt(7)), 0)
+    def test_minute_7(self):
+        self.assertEqual(get_bucket_interval(self._dt(7)), self._expected(7))
 
-    def test_minute_14_returns_0(self):
-        # right before the boundary — must still be in bucket 0
-        self.assertEqual(get_15min_interval(self._dt(14)), 0)
+    def test_minute_14(self):
+        self.assertEqual(get_bucket_interval(self._dt(14)), self._expected(14))
 
-    # --- bucket 15 (15–29) ---
-    def test_minute_15_returns_15(self):
-        self.assertEqual(get_15min_interval(self._dt(15)), 15)
+    def test_minute_15(self):
+        self.assertEqual(get_bucket_interval(self._dt(15)), self._expected(15))
 
-    def test_minute_22_returns_15(self):
-        self.assertEqual(get_15min_interval(self._dt(22)), 15)
+    def test_minute_22(self):
+        self.assertEqual(get_bucket_interval(self._dt(22)), self._expected(22))
 
-    def test_minute_29_returns_15(self):
-        self.assertEqual(get_15min_interval(self._dt(29)), 15)
+    def test_minute_29(self):
+        self.assertEqual(get_bucket_interval(self._dt(29)), self._expected(29))
 
-    # --- bucket 30 (30–44) ---
-    def test_minute_30_returns_30(self):
-        self.assertEqual(get_15min_interval(self._dt(30)), 30)
+    def test_minute_30(self):
+        self.assertEqual(get_bucket_interval(self._dt(30)), self._expected(30))
 
-    def test_minute_37_returns_30(self):
-        self.assertEqual(get_15min_interval(self._dt(37)), 30)
+    def test_minute_37(self):
+        self.assertEqual(get_bucket_interval(self._dt(37)), self._expected(37))
 
-    def test_minute_44_returns_30(self):
-        self.assertEqual(get_15min_interval(self._dt(44)), 30)
+    def test_minute_44(self):
+        self.assertEqual(get_bucket_interval(self._dt(44)), self._expected(44))
 
-    # --- bucket 45 (45–59) ---
-    def test_minute_45_returns_45(self):
-        self.assertEqual(get_15min_interval(self._dt(45)), 45)
+    def test_minute_45(self):
+        self.assertEqual(get_bucket_interval(self._dt(45)), self._expected(45))
 
-    def test_minute_52_returns_45(self):
-        self.assertEqual(get_15min_interval(self._dt(52)), 45)
+    def test_minute_52(self):
+        self.assertEqual(get_bucket_interval(self._dt(52)), self._expected(52))
 
-    def test_minute_59_returns_45(self):
-        # highest possible minute — must still land in bucket 45, not 60
-        self.assertEqual(get_15min_interval(self._dt(59)), 45)
+    def test_minute_59(self):
+        # highest possible minute — never overflows to 60
+        self.assertEqual(get_bucket_interval(self._dt(59)), self._expected(59))
 
 
 # ============================================================
-# floor_to_15min  —  verify flooring + seconds/microseconds zeroed
+# floor_to_bucket  —  adapts to BUCKET_MINUTES
 # ============================================================
 
-class TestFloorTo15min(unittest.TestCase):
+class TestFloorToBucket(unittest.TestCase):
 
-    def test_floors_07_to_00(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 10, 7, 23, 456789))
-        self.assertEqual(result, datetime(2026, 7, 3, 10, 0, 0, 0))
+    def _expected(self, minute: int) -> int:
+        return (minute // BUCKET_MINUTES) * BUCKET_MINUTES
 
-    def test_floors_22_to_15(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 10, 22, 45, 123456))
-        self.assertEqual(result, datetime(2026, 7, 3, 10, 15, 0, 0))
+    def test_floors_07(self):
+        result = floor_to_bucket(datetime(2026, 7, 3, 10, 7, 23, 456789))
+        self.assertEqual(result, datetime(2026, 7, 3, 10, self._expected(7), 0, 0))
 
-    def test_floors_37_to_30(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 10, 37, 8, 999999))
-        self.assertEqual(result, datetime(2026, 7, 3, 10, 30, 0, 0))
+    def test_floors_22(self):
+        result = floor_to_bucket(datetime(2026, 7, 3, 10, 22, 45, 123456))
+        self.assertEqual(result, datetime(2026, 7, 3, 10, self._expected(22), 0, 0))
 
-    def test_floors_52_to_45(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 10, 52, 59, 1))
-        self.assertEqual(result, datetime(2026, 7, 3, 10, 45, 0, 0))
+    def test_floors_37(self):
+        result = floor_to_bucket(datetime(2026, 7, 3, 10, 37, 8, 999999))
+        self.assertEqual(result, datetime(2026, 7, 3, 10, self._expected(37), 0, 0))
+
+    def test_floors_52(self):
+        result = floor_to_bucket(datetime(2026, 7, 3, 10, 52, 59, 1))
+        self.assertEqual(result, datetime(2026, 7, 3, 10, self._expected(52), 0, 0))
 
     def test_floors_00_is_00(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 10, 0, 0, 0))
+        result = floor_to_bucket(datetime(2026, 7, 3, 10, 0, 0, 0))
         self.assertEqual(result, datetime(2026, 7, 3, 10, 0, 0, 0))
 
-    def test_floors_59_to_45(self):
-        result = floor_to_15min(datetime(2026, 7, 3, 23, 59, 59, 999999))
-        self.assertEqual(result, datetime(2026, 7, 3, 23, 45, 0, 0))
+    def test_floors_59(self):
+        result = floor_to_bucket(datetime(2026, 7, 3, 23, 59, 59, 999999))
+        self.assertEqual(result, datetime(2026, 7, 3, 23, self._expected(59), 0, 0))
 
     def test_hour_unchanged_across_bucket(self):
-        # Midnight: 00:03 must floor to 00:00, not 23:45 of the previous day
-        result = floor_to_15min(datetime(2026, 7, 3, 0, 3, 0, 0))
-        self.assertEqual(result, datetime(2026, 7, 3, 0, 0, 0, 0))
+        # Midnight: 00:03 must floor to 00:(03//B)*B, not 23:xx of the previous day
+        result = floor_to_bucket(datetime(2026, 7, 3, 0, 3, 0, 0))
+        self.assertEqual(result, datetime(2026, 7, 3, 0, self._expected(3), 0, 0))
 
 
 # ============================================================
