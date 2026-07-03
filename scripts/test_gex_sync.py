@@ -7,6 +7,7 @@ from gex_sync import (
     CSV_HEADER,
     _already_in_csv,
     _format_csv_row,
+    _is_in_gex_window,
     build_gex_url,
     floor_to_15min,
     get_15min_interval,
@@ -224,6 +225,39 @@ class TestFormatCsvRow(unittest.TestCase):
         dt = datetime(2026, 12, 31, 23, 45, 0)
         row = _format_csv_row(dt, "2027-01-15", 1, 2, 3, "z", 4)
         self.assertIn("2027-01-15 00:00:00", row)
+
+
+# ============================================================
+# _is_in_gex_window  —  Rome-time window check
+# ============================================================
+
+class TestIsInGexWindow(unittest.TestCase):
+
+    def _dt(self, hour: int, minute: int) -> datetime:
+        # All test datetimes are Rome-local; _is_in_gex_window only checks .time()
+        from zoneinfo import ZoneInfo
+        return datetime(2026, 7, 3, hour, minute, 0, tzinfo=ZoneInfo("Europe/Rome"))
+
+    def test_inside_window_mid_afternoon(self):
+        self.assertTrue(_is_in_gex_window(self._dt(18, 30)))
+
+    def test_window_open_at_15_00(self):
+        self.assertTrue(_is_in_gex_window(self._dt(15, 0)))
+
+    def test_window_closed_at_21_45(self):
+        self.assertTrue(_is_in_gex_window(self._dt(21, 45)))
+
+    def test_before_window_14_59(self):
+        self.assertFalse(_is_in_gex_window(self._dt(14, 59)))
+
+    def test_after_window_21_46(self):
+        self.assertFalse(_is_in_gex_window(self._dt(21, 46)))
+
+    def test_midnight_is_outside(self):
+        self.assertFalse(_is_in_gex_window(self._dt(0, 0)))
+
+    def test_morning_is_outside(self):
+        self.assertFalse(_is_in_gex_window(self._dt(10, 0)))
 
 
 # ============================================================

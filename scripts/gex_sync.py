@@ -3,7 +3,8 @@ import os
 import sys
 import time
 import urllib.request
-from datetime import datetime
+from datetime import datetime, time as time_obj
+from zoneinfo import ZoneInfo
 
 CSV_HEADER = "datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,stockPrice"
 
@@ -79,12 +80,28 @@ def fetch_gex(expirations: str) -> dict | None:
         return None
 
 
+ROME_TZ = ZoneInfo("Europe/Rome")
+
+
+def _is_in_gex_window(now_rome: datetime) -> bool:
+    """Return True if we're inside the GEX data window: 15:00–21:45 Europe/Rome."""
+    start = time_obj(15, 0)
+    end = time_obj(21, 45)
+    return start <= now_rome.time() <= end
+
+
 def sync_loop(expiration: str, interval_seconds: float = 5.0):
     print(f"Expiration: {expiration}")
-    print(f"Polling every {interval_seconds}s — fetching GEX on new interval\nCtrl+C to stop\n")
+    print(f"Polling every {interval_seconds}s — fetching GEX on new interval")
+    print(f"Window: 15:00–21:45 Europe/Rome\nCtrl+C to stop\n")
     last = None
     try:
         while True:
+            now_rome = datetime.now(ROME_TZ)
+            if not _is_in_gex_window(now_rome):
+                print(f"[{now_rome:%H:%M:%S}]  outside GEX window (15:00–21:45 Rome), waiting...")
+                time.sleep(interval_seconds)
+                continue
             now = datetime.now()
             floored = floor_to_15min(now)
             if floored == last:
