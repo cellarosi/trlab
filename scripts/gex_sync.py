@@ -86,22 +86,22 @@ ROME_TZ = ZoneInfo("Europe/Rome")
 
 
 def _is_in_gex_window(now_rome: datetime) -> bool:
-    """Return True if we're inside the GEX data window: 15:00–21:45 Europe/Rome."""
-    start = time_obj(15, 0)
-    end = time_obj(21, 45)
+    """Return True if we're inside the GEX data window: 15:30–21:59 Europe/Rome."""
+    start = time_obj(15, 30)
+    end = time_obj(21, 59)
     return start <= now_rome.time() <= end
 
 
 def sync_loop(expiration: str, interval_seconds: float = 5.0):
     print(f"Expiration: {expiration}")
     print(f"Bucket: {BUCKET_MINUTES}min  |  Polling every {interval_seconds}s")
-    print(f"Window: 15:00–21:45 Europe/Rome\nCtrl+C to stop\n")
+    print(f"Window: 15:30–21:59 Europe/Rome\nCtrl+C to stop\n")
     last = None
     try:
         while True:
             now_rome = datetime.now(ROME_TZ)
             if not _is_in_gex_window(now_rome):
-                print(f"[{now_rome:%H:%M:%S}]  outside GEX window (15:00–21:45 Rome), waiting...")
+                print(f"[{now_rome:%H:%M:%S}]  outside GEX window (15:30–21:59 Rome), waiting...")
                 time.sleep(interval_seconds)
                 continue
             now = datetime.now()

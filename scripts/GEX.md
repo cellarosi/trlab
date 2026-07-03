@@ -43,7 +43,7 @@ datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,sto
 
 ### Time window (Europe/Rome)
 
-The script only fetches data during market hours: **15:00–21:45 Europe/Rome** (inclusive). At 22:00 Rome time the current day's expiration no longer exists on the API, so any fetch after 21:45 would only return errors. Outside the window, the loop sleeps for `interval_seconds` (5s) and retries — no state changes, no API calls.
+The script only fetches data during market hours: **15:30–21:59 Europe/Rome** (inclusive). At 22:00 Rome time the current day's expiration no longer exists on the API, so any fetch after 21:59 would only return errors. Outside the window, the loop sleeps for `interval_seconds` (5s) and retries — no state changes, no API calls.
 
 `_is_in_gex_window()` checks the current Rome time via `datetime.now(ROME_TZ)` and compares against the hard-coded range. This runs as the **first check** in every loop iteration, before the interval-bucket guard and before any HTTP fetch.
 
@@ -130,7 +130,7 @@ When `fetch_gex` returns `None` (failure), the fields default to `""` (empty str
 ## Known issues
 
 1. **Today's date returns 404.** The API serves future expirations only. Pass a future date explicitly.
-2. **Time window is hard-coded to Europe/Rome.** The GEX data window (15:00–21:45) is specific to the SPX options market schedule. Running the script from a different timezone is fine — the check always uses Rome time.
+2. **Time window is hard-coded to Europe/Rome.** The GEX data window (15:30–21:59) is specific to the SPX options market schedule. Running the script from a different timezone is fine — the check always uses Rome time.
 3. **Session cookie expires.** The `__Secure-authjs.session-token` has an expiration (visible in the cookie table). When requests start failing with 429 again, refresh the cookie from the browser.
 4. **No retry on fetch failure.** If `fetch_gex` returns `None`, the row is still written with empty values. A next iteration could add exponential backoff.
 5. **Day boundary.** Expiration is passed as a CLI arg and never changes. If the script runs past midnight into a new trading day, the expiration may become stale.
@@ -144,7 +144,7 @@ When `fetch_gex` returns `None` (failure), the fields default to `""` (empty str
 | `TestGet15minInterval` | 12 | All 4 buckets, boundary edges (0, 14, 15, 29, 30, 44, 45, 59) |
 | `TestFloorTo15min` | 7 | All buckets, seconds/microseconds zeroed, midnight boundary |
 | `TestBuildGexUrl` | 2 | URL formation with different expirations |
-| `TestIsInGexWindow` | 7 | Inside/outside Rome window, boundaries at 15:00, 21:45, 14:59, 21:46 |
+| `TestIsInGexWindow` | 7 | Inside/outside Rome window, boundaries at 15:30, 21:59, 15:29, 22:00 |
 | `TestAlreadyInCsv` | 7 | File missing, empty, not-found, found, header collision, prefix matching, multi-row |
 | `TestFormatCsvRow` | 5 | Full values, `None`, empty strings, floats, expiration midnight padding |
 | `TestWriteGexCsv` | 10 | New file, append, duplicate skip, all 4 buckets, `None`/empty values, 3-4 interval sequences |

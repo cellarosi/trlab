@@ -243,17 +243,17 @@ class TestIsInGexWindow(unittest.TestCase):
     def test_inside_window_mid_afternoon(self):
         self.assertTrue(_is_in_gex_window(self._dt(18, 30)))
 
-    def test_window_open_at_15_00(self):
-        self.assertTrue(_is_in_gex_window(self._dt(15, 0)))
+    def test_window_open_at_15_30(self):
+        self.assertTrue(_is_in_gex_window(self._dt(15, 30)))
 
-    def test_window_closed_at_21_45(self):
-        self.assertTrue(_is_in_gex_window(self._dt(21, 45)))
+    def test_window_closed_at_21_59(self):
+        self.assertTrue(_is_in_gex_window(self._dt(21, 59)))
 
-    def test_before_window_14_59(self):
-        self.assertFalse(_is_in_gex_window(self._dt(14, 59)))
+    def test_before_window_15_29(self):
+        self.assertFalse(_is_in_gex_window(self._dt(15, 29)))
 
-    def test_after_window_21_46(self):
-        self.assertFalse(_is_in_gex_window(self._dt(21, 46)))
+    def test_after_window_22_00(self):
+        self.assertFalse(_is_in_gex_window(self._dt(22, 0)))
 
     def test_midnight_is_outside(self):
         self.assertFalse(_is_in_gex_window(self._dt(0, 0)))
