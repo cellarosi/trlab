@@ -9,8 +9,8 @@ A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com
 | File | Role |
 |---|---|
 | `scripts/gex_sync.py` | Production code — the polling daemon |
-| `scripts/test_gex_sync.py` | Unit tests — 48 tests, all passing |
-| `scripts/GEX.md` | This document |
+| `tests/test_gex_sync.py` | Unit tests — 48 tests, all passing |
+| `misc/GEX.md` | This document |
 
 ## How to run
 
@@ -24,7 +24,7 @@ poetry run python scripts/gex_sync.py
 
 Tests:
 ```bash
-cd scripts && python3 -m unittest test_gex_sync -v
+cd tests && python3 -m unittest test_gex_sync -v
 ```
 
 ## CSV output format

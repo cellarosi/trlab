@@ -1,7 +1,10 @@
 import os
+import sys
 import tempfile
 import unittest
 from datetime import datetime
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from gex_sync import (
     BUCKET_MINUTES,
