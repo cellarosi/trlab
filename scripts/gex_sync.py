@@ -41,7 +41,7 @@ def _format_csv_row(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma
     return f"{ts},{expiration} 00:00:00,{cw_strike},{pw_strike},{gamma_infl},{gamma_zone},{stock_price}"
 
 
-def _already_in_csv(ts: str, path: str = "gex.csv") -> bool:
+def _already_in_csv(ts: str, path: str = "db/gex.csv") -> bool:
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return False
     with open(path) as f:
@@ -49,7 +49,7 @@ def _already_in_csv(ts: str, path: str = "gex.csv") -> bool:
 
 
 def write_gex_csv(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, stock_price,
-                  path: str = "gex.csv") -> bool:
+                  path: str = "db/gex.csv") -> bool:
     ts = floored.strftime("%Y-%m-%d %H:%M:%S")
     if _already_in_csv(ts, path):
         print(f"[{datetime.now():%H:%M:%S}]  interval {ts} already in {path}, skipping")

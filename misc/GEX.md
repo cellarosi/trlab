@@ -2,7 +2,7 @@
 
 ## What this is
 
-A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com](https://quantwheel.com) every 15 minutes and appends it to a local CSV (`gex.csv`). The script runs indefinitely, writing a new row only when a new 15-minute bucket is entered.
+A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com](https://quantwheel.com) every 15 minutes and appends it to a local CSV (`db/gex.csv`). The script runs indefinitely, writing a new row only when a new 15-minute bucket is entered.
 
 ## Files
 
@@ -70,7 +70,7 @@ This replaces an earlier 4-branch `if/elif` chain.
 Two layers prevent duplicate rows:
 
 1. **In-memory** (`floored == last`): skips the fetch + disk check entirely once we've already seen this interval in the current process. Cheap, no I/O.
-2. **On-disk** (`_already_in_csv`): catches restarts. If the script is killed and relaunched within the same bucket window, it reads `gex.csv` and skips rows that already exist. More expensive (file read) but only runs once per interval.
+2. **On-disk** (`_already_in_csv`): catches restarts. If the script is killed and relaunched within the same bucket window, it reads `db/gex.csv` and skips rows that already exist. More expensive (file read) but only runs once per interval.
 
 The `_already_in_csv` check uses `line.startswith(ts)` rather than exact match. This is deliberately loose: `"2026-07-03 10:00:00"` would also match `"2026-07-03 10:00:00.123"` if that ever appeared. In practice `ts` is always in `YYYY-MM-DD HH:MM:SS` format so this only affects same-second collisions (which are fine — they're the same interval).
 
