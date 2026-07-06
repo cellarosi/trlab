@@ -30,7 +30,7 @@ cd tests && python3 -m unittest test_gex_sync -v
 ## CSV output format
 
 ```
-datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,stockPrice
+datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,underlyingPrice
 2026-07-03 20:00:00,2026-07-06 00:00:00,7500,7450,7473.63,positive,7483.24
 2026-07-03 20:15:00,2026-07-06 00:00:00,7500,7450,7473.63,positive,7483.24
 ```

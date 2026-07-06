@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime, time as time_obj
 from zoneinfo import ZoneInfo
 
-CSV_HEADER = "datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,stockPrice"
+CSV_HEADER = "datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,underlyingPrice"
 
 BUCKET_MINUTES = 1  # change to 5, 15, etc. for coarser granularity
 
@@ -36,9 +36,9 @@ def build_gex_url(expirations: str) -> str:
     return f"https://quantwheel.com/api/tools/gex?ticker=SPX&expirations={expirations}&deltaRange=all&formula=per_1pct"
 
 
-def _format_csv_row(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, stock_price):
+def _format_csv_row(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, underlying_price):
     ts = floored.strftime("%Y-%m-%d %H:%M:%S")
-    return f"{ts},{expiration} 00:00:00,{cw_strike},{pw_strike},{gamma_infl},{gamma_zone},{stock_price}"
+    return f"{ts},{expiration} 00:00:00,{cw_strike},{pw_strike},{gamma_infl},{gamma_zone},{underlying_price}"
 
 
 def _already_in_csv(ts: str, path: str = "db/gex.csv") -> bool:
@@ -48,14 +48,14 @@ def _already_in_csv(ts: str, path: str = "db/gex.csv") -> bool:
         return any(line.startswith(ts) for line in f)
 
 
-def write_gex_csv(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, stock_price,
+def write_gex_csv(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, underlying_price,
                   path: str = "db/gex.csv") -> bool:
     ts = floored.strftime("%Y-%m-%d %H:%M:%S")
     if _already_in_csv(ts, path):
         print(f"[{datetime.now():%H:%M:%S}]  interval {ts} already in {path}, skipping")
         return False
     new_file = not os.path.exists(path) or os.path.getsize(path) == 0
-    row = _format_csv_row(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, stock_price)
+    row = _format_csv_row(floored, expiration, cw_strike, pw_strike, gamma_infl, gamma_zone, underlying_price)
     with open(path, "a") as f:
         if new_file:
             f.write(CSV_HEADER + "\n")
@@ -123,8 +123,8 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
             pw = data["putWall"]["strike"] if data else ""
             gi = data.get("gammaInflection", "") if data else ""
             gz = data.get("gammaZone", "") if data else ""
-            sp = data.get("stockPrice", "") if data else ""
-            write_gex_csv(floored, expiration, cw, pw, gi, gz, sp)
+            up = data.get("stockPrice", "") if data else ""
+            write_gex_csv(floored, expiration, cw, pw, gi, gz, up)
             time.sleep(interval_seconds)
     except KeyboardInterrupt:
         print("\nStopped.")
