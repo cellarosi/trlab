@@ -1,1 +1,0 @@
-"""Scheduled jobs for the scheduler application."""

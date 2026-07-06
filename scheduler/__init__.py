@@ -1,1 +1,0 @@
-"""Perpetual async scheduler application."""
