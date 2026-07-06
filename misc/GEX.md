@@ -100,6 +100,8 @@ The sync loop uses only stdlib (`urllib.request`, `json`, `os`, `time`, `datetim
 
 When `fetch_gex` returns `None` (failure), the fields default to `""` (empty string). But if a field is genuinely `None` (Python `None`), `_format_csv_row` stringifies it to `"None"`. This is intentional: an empty cell would silently hide missing data, while `"None"` is explicit and greppable.
 
+Additionally, `callWall` and `putWall` in the API response can themselves be `null` (not just their `.strike` sub-field — the entire object is null). The extraction code uses `(data.get("callWall") or {}).get("strike", "")` to safely handle this: when `callWall` is `None` (missing from response), `or {}` falls back to an empty dict, and `.get("strike", "")` returns `""`.
+
 ## API details
 
 **Endpoint:** `GET https://quantwheel.com/api/tools/gex`
@@ -117,8 +119,8 @@ When `fetch_gex` returns `None` (failure), the fields default to `""` (empty str
 {
   "data": [ ... ],           // 57 strike-level GEX rows
   "totalGEX": -87785861654,
-  "callWall": {"strike": 7500, "gex": 68855103974},
-  "putWall":  {"strike": 7450, "gex": -86385049649},
+  "callWall": {"strike": 7500, "gex": 68855103974},  // can be null
+  "putWall":  {"strike": 7450, "gex": -86385049649},  // can be null
   "gammaInflection": 7473.63,
   "gammaZone": "positive",
   "stockPrice": 7483.24,

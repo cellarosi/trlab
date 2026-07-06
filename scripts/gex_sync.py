@@ -119,8 +119,8 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
                 time.sleep(interval_seconds)
                 continue
             data = fetch_gex(expiration)
-            cw = data["callWall"]["strike"] if data else ""
-            pw = data["putWall"]["strike"] if data else ""
+            cw = (data.get("callWall") or {}).get("strike", "") if data else ""
+            pw = (data.get("putWall") or {}).get("strike", "") if data else ""
             gi = data.get("gammaInflection", "") if data else ""
             gz = data.get("gammaZone", "") if data else ""
             up = data.get("stockPrice", "") if data else ""
