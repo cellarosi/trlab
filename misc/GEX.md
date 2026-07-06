@@ -2,13 +2,13 @@
 
 ## What this is
 
-A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com](https://quantwheel.com) every 15 minutes and appends it to a local CSV (`db/gex.csv`). The script runs indefinitely, writing a new row only when a new 15-minute bucket is entered.
+A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com](https://quantwheel.com) every minute and appends it to a local CSV (`db/gex.csv`). The script runs indefinitely, writing a new row only when a new 1-minute bucket is entered. Also includes a `plot_gex()` function to visualize the collected data.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `scripts/gex_sync.py` | Production code — the polling daemon |
+| `scripts/gex_sync.py` | Production code — polling daemon + plotting (`--plot`) |
 | `tests/test_gex_sync.py` | Unit tests — 48 tests, all passing |
 | `misc/GEX.md` | This document |
 
@@ -20,6 +20,10 @@ poetry run python scripts/gex_sync.py 2026-07-06
 
 # Defaults to today's date (usually a 404 — see "Known issues")
 poetry run python scripts/gex_sync.py
+
+# Plot collected data
+poetry run python scripts/gex_sync.py --plot
+poetry run python scripts/gex_sync.py --plot other.csv
 ```
 
 Tests:
@@ -35,7 +39,7 @@ datetime,expiration,callWall_strike,putWall_strike,gammaInflection,gammaZone,und
 2026-07-03 20:15:00,2026-07-06 00:00:00,7500,7450,7473.63,positive,7483.24
 ```
 
-- `datetime` — floored to the nearest 15-minute mark (always `:00`, `:15`, `:30`, or `:45`)
+- `datetime` — floored to the nearest minute (configurable via `BUCKET_MINUTES`)
 - `expiration` — the option expiration date, padded with ` 00:00:00` to match the datetime format
 - All other fields come directly from the API response
 
@@ -49,10 +53,10 @@ The script only fetches data during market hours: **15:30–21:59 Europe/Rome** 
 
 ### Time bucketing
 
-The bucket size is controlled by `BUCKET_MINUTES` (default 15). Change it to 5 or 1 for finer granularity:
+The bucket size is controlled by `BUCKET_MINUTES` (default 1). Change it to 5, 15, etc. for coarser granularity:
 
 ```python
-BUCKET_MINUTES = 15  # change to 5, 1, etc. for finer granularity
+BUCKET_MINUTES = 1  # change to 5, 15, etc. for coarser granularity
 ```
 
 The bucket interval is computed with integer division:
@@ -141,8 +145,8 @@ When `fetch_gex` returns `None` (failure), the fields default to `""` (empty str
 
 | Class | Tests | What it covers |
 |---|---|---|
-| `TestGet15minInterval` | 12 | All 4 buckets, boundary edges (0, 14, 15, 29, 30, 44, 45, 59) |
-| `TestFloorTo15min` | 7 | All buckets, seconds/microseconds zeroed, midnight boundary |
+| `TestGetBucketInterval` | 12 | All buckets, boundary edges (0, 7, 14, 15, 22, 29, 30, 37, 44, 45, 52, 59) |
+| `TestFloorToBucket` | 7 | All buckets, seconds/microseconds zeroed, midnight boundary |
 | `TestBuildGexUrl` | 2 | URL formation with different expirations |
 | `TestIsInGexWindow` | 7 | Inside/outside Rome window, boundaries at 15:30, 21:59, 15:29, 22:00 |
 | `TestAlreadyInCsv` | 7 | File missing, empty, not-found, found, header collision, prefix matching, multi-row |
@@ -150,6 +154,18 @@ When `fetch_gex` returns `None` (failure), the fields default to `""` (empty str
 | `TestWriteGexCsv` | 10 | New file, append, duplicate skip, all 4 buckets, `None`/empty values, 3-4 interval sequences |
 
 Tests use `tempfile.NamedTemporaryFile` with `delete=False` + manual cleanup. This avoids OS locks (some platforms prevent re-opening a `NamedTemporaryFile` while its handle is open).
+
+## Plotting
+
+`plot_gex()` reads `db/gex.csv` and renders a single matplotlib chart:
+- **X-axis**: datetime (`HH:MM` format)
+- **Y-axis**: Underlying Price (solid), Call Wall (dashed), Put Wall (dashed)
+
+Missing values from failed fetches (`"None"` strings) are forward-filled (`df.ffill()`) so lines stay continuous. Call it directly or via the `--plot` CLI flag:
+
+```bash
+python scripts/gex_sync.py --plot
+```
 
 ## Future directions (ideas for next session)
 

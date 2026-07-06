@@ -130,6 +130,63 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
         print("\nStopped.")
 
 
+def plot_gex(csv_path: str = "db/gex.csv") -> None:
+    """Read the GEX CSV and plot underlyingPrice, callWall, putWall, and gammaInflection over time."""
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+
+    df = pd.read_csv(csv_path)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df.set_index("datetime", inplace=True)
+
+    # Convert numeric columns (some may be string 'None' due to fetch failures)
+    for col in ["underlyingPrice", "callWall_strike", "putWall_strike"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Forward-fill gaps so the chart doesn't break on missing fetches
+    df = df.ffill()
+
+    # Detect contiguous gammaZone regions for background shading
+    zone = df["gammaZone"].ffill()
+    is_positive = (zone == "positive")
+    # Mark region boundaries: True where zone changes from previous row
+    changes = is_positive.ne(is_positive.shift())
+    boundaries = df.index[changes].tolist()
+    if len(boundaries) > 0 and boundaries[0] != df.index[0]:
+        boundaries.insert(0, df.index[0])
+    if boundaries[-1] != df.index[-1]:
+        boundaries.append(df.index[-1])
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    # Draw shaded background for gammaZone regions
+    for i in range(len(boundaries) - 1):
+        start = boundaries[i]
+        end = boundaries[i + 1]
+        color = "green" if is_positive.loc[start] else "red"
+        ax.axvspan(start, end, alpha=0.08, color=color, linewidth=0)
+
+    ax.plot(df.index, df["underlyingPrice"], label="Underlying Price", linewidth=1.5)
+    ax.plot(df.index, df["callWall_strike"], label="Call Wall", linewidth=1.5, linestyle="--", color="green")
+    ax.plot(df.index, df["putWall_strike"], label="Put Wall", linewidth=1.5, linestyle="--", color="red")
+
+    ax.set_xlabel("Datetime")
+    ax.set_ylabel("Strike / Price")
+    ax.set_title("SPX GEX — Call Wall, Put Wall & Underlying")
+    ax.legend(loc="best")
+    ax.grid(True, alpha=0.3)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    fig.autofmt_xdate()
+
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
-    expiration = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
-    sync_loop(expiration)
+    if len(sys.argv) > 1 and sys.argv[1] == "--plot":
+        csv_path = sys.argv[2] if len(sys.argv) > 2 else "db/gex.csv"
+        plot_gex(csv_path)
+    else:
+        expiration = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+        sync_loop(expiration)
