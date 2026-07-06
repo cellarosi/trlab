@@ -94,7 +94,7 @@ To refresh: open quantwheel.com in a browser, sign in, copy the cookie string fr
 
 ### Why no `requests` library
 
-The script uses only stdlib (`urllib.request`, `json`, `os`, `time`, `datetime`). No external dependencies needed beyond Python 3. This was a deliberate choice to keep the test suite dependency-free and the script runnable in any environment.
+The sync loop uses only stdlib (`urllib.request`, `json`, `os`, `time`, `datetime`). No external dependencies needed beyond Python 3 for the core daemon. This was a deliberate choice to keep the sync and test suite dependency-free. The `plot_gex()` function requires `matplotlib` (and transitively `pandas`) but is optional — the daemon runs without it.
 
 ### Why `None` is stringified to `"None"` in CSV
 
@@ -159,13 +159,16 @@ Tests use `tempfile.NamedTemporaryFile` with `delete=False` + manual cleanup. Th
 
 `plot_gex()` reads `db/gex.csv` and renders a single matplotlib chart:
 - **X-axis**: datetime (`HH:MM` format)
-- **Y-axis**: Underlying Price (solid), Call Wall (dashed), Put Wall (dashed)
+- **Y-axis**: Underlying Price (blue solid), Call Wall (green dashed), Put Wall (red dashed)
+- **Background**: tinted per `gammaZone` — green when `"positive"`, red otherwise (alpha 0.08)
 
 Missing values from failed fetches (`"None"` strings) are forward-filled (`df.ffill()`) so lines stay continuous. Call it directly or via the `--plot` CLI flag:
 
 ```bash
 python scripts/gex_sync.py --plot
 ```
+
+Requires `matplotlib` (listed in `pyproject.toml`).
 
 ## Future directions (ideas for next session)
 
