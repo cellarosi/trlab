@@ -104,7 +104,7 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
                 print(f"[{now_rome:%H:%M:%S}]  outside GEX window (15:30–21:59 Rome), waiting...")
                 time.sleep(interval_seconds)
                 continue
-            now = datetime.now()
+            now = datetime.now(ROME_TZ)
             floored = floor_to_bucket(now)
             if floored == last:
                 print(f"[{now:%H:%M:%S}]  same interval ({floored:%H:%M}), waiting...")

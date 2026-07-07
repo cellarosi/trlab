@@ -161,7 +161,7 @@ Additionally, `callWall` and `putWall` in the API response can themselves be `nu
 ## Known issues
 
 1. **Today's date returns 404.** The API serves future expirations only. Pass a future date explicitly.
-2. **Time window is hard-coded to Europe/Rome.** The GEX data window (15:30–21:59) is specific to the SPX options market schedule. Running the script from a different timezone is fine — the check always uses Rome time.
+2. **Time window is hard-coded to Europe/Rome.** The GEX data window (15:30–21:59) is specific to the SPX options market schedule. Both the window check and CSV bucket timestamps use Rome time, so running the script from a different timezone is fine — all times are consistent.
 3. **Session cookie expires.** The `__Secure-authjs.session-token` has an expiration (visible in the cookie table). When requests start failing with 429 again, refresh the cookie from the browser.
 4. **No retry on fetch failure.** If `fetch_gex` returns `None`, the row is still written with empty values. A next iteration could add exponential backoff.
 5. **Day boundary.** Expiration is passed as a CLI arg and never changes. If the script runs past midnight into a new trading day, the expiration may become stale.
