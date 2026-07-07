@@ -1,0 +1,6 @@
+services:
+  gex-sync:
+    build: .
+    restart: always
+    volumes:
+      - ./db:/app/db

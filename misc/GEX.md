@@ -10,6 +10,8 @@ A polling daemon that fetches SPX Gamma Exposure (GEX) data from [quantwheel.com
 |---|---|
 | `scripts/gex_sync.py` | Production code — polling daemon + plotting (`--plot`) |
 | `tests/test_gex_sync.py` | Unit tests — 48 tests, all passing |
+| `Dockerfile` | Lightweight container image (~74 MB) |
+| `docker-compose.yml` | Orchestration with auto-restart on crash |
 | `misc/GEX.md` | This document |
 
 ## How to run
@@ -30,6 +32,29 @@ Tests:
 ```bash
 cd tests && python3 -m unittest test_gex_sync -v
 ```
+
+### Docker
+
+```bash
+# Build the image (~74 MB uncompressed, ~30 MB on registry)
+docker build -t gex-sync .
+
+# Run (defaults to today's expiration)
+docker run --rm -v $(pwd)/db:/app/db gex-sync
+
+# Run with a specific future expiration (recommended — API 404s on today)
+docker run --rm -v $(pwd)/db:/app/db gex-sync 2026-08-15
+
+# Plot collected data
+docker run --rm -v $(pwd)/db:/app/db gex-sync --plot
+
+# docker-compose: auto-restart on crash
+docker compose up -d
+docker compose logs -f
+docker compose down
+```
+
+The image uses `python:3.13-alpine` with only `tzdata` added — the daemon needs zero pip packages (stdlib only). `restart: always` ensures the container comes back up after any crash or Docker daemon restart.
 
 ## CSV output format
 
