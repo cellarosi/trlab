@@ -23,9 +23,10 @@ poetry run python scripts/gex_sync.py 2026-07-06
 # Defaults to today's date (usually a 404 — see "Known issues")
 poetry run python scripts/gex_sync.py
 
-# Plot collected data
+# Plot collected data (default: today)
 poetry run python scripts/gex_sync.py --plot
 poetry run python scripts/gex_sync.py --plot other.csv
+poetry run python scripts/gex_sync.py --plot other.csv 2026-07-04
 ```
 
 Tests:
@@ -45,8 +46,9 @@ docker run --rm -v $(pwd)/db:/app/db gex-sync
 # Run with a specific future expiration (recommended — API 404s on today)
 docker run --rm -v $(pwd)/db:/app/db gex-sync 2026-08-15
 
-# Plot collected data
+# Plot collected data (default: today)
 docker run --rm -v $(pwd)/db:/app/db gex-sync --plot
+docker run --rm -v $(pwd)/db:/app/db gex-sync --plot db/gex.csv 2026-07-04
 
 # docker-compose: auto-restart on crash
 docker compose up -d
@@ -184,7 +186,7 @@ Tests use `tempfile.NamedTemporaryFile` with `delete=False` + manual cleanup. Th
 
 ## Plotting
 
-`plot_gex()` reads `db/gex.csv` and renders a single matplotlib chart:
+`plot_gex()` reads `db/gex.csv` and renders a single matplotlib chart, **filtered to today by default**:
 - **X-axis**: datetime (`HH:MM` format)
 - **Y-axis**: Underlying Price (blue solid), Call Wall (green dashed), Put Wall (red dashed)
 - **Background**: tinted per `gammaZone` — green when `"positive"`, red otherwise (alpha 0.08)
@@ -192,7 +194,14 @@ Tests use `tempfile.NamedTemporaryFile` with `delete=False` + manual cleanup. Th
 Missing values from failed fetches (`"None"` strings) are forward-filled (`df.ffill()`) so lines stay continuous. Call it directly or via the `--plot` CLI flag:
 
 ```bash
+# Plot today's data from the default CSV
 python scripts/gex_sync.py --plot
+
+# Plot today's data from a custom CSV
+python scripts/gex_sync.py --plot other.csv
+
+# Plot a specific date
+python scripts/gex_sync.py --plot other.csv 2026-07-04
 ```
 
 Requires `matplotlib` (listed in `pyproject.toml`).

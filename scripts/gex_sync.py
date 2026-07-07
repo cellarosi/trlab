@@ -130,14 +130,28 @@ def sync_loop(expiration: str, interval_seconds: float = 5.0):
         print("\nStopped.")
 
 
-def plot_gex(csv_path: str = "db/gex.csv") -> None:
-    """Read the GEX CSV and plot underlyingPrice, callWall, putWall, and gammaInflection over time."""
+def plot_gex(csv_path: str = "db/gex.csv", date: str | None = None) -> None:
+    """Read the GEX CSV and plot underlyingPrice, callWall, putWall, and gammaInflection.
+
+    By default filters to today's data. Pass date='YYYY-MM-DD' to override.
+    """
     import pandas as pd
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
 
     df = pd.read_csv(csv_path)
     df["datetime"] = pd.to_datetime(df["datetime"])
+
+    # Default to today
+    if date is None:
+        date = datetime.now(ROME_TZ).strftime("%Y-%m-%d")
+    mask = df["datetime"].dt.date == pd.to_datetime(date).date()
+    df = df[mask]
+
+    if df.empty:
+        print(f"No data for {date}")
+        return
+
     df.set_index("datetime", inplace=True)
 
     # Convert numeric columns (some may be string 'None' due to fetch failures)
@@ -186,7 +200,8 @@ def plot_gex(csv_path: str = "db/gex.csv") -> None:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--plot":
         csv_path = sys.argv[2] if len(sys.argv) > 2 else "db/gex.csv"
-        plot_gex(csv_path)
+        date = sys.argv[3] if len(sys.argv) > 3 else None
+        plot_gex(csv_path, date=date)
     else:
         expiration = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
         sync_loop(expiration)
