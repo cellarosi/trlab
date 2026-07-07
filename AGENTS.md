@@ -23,6 +23,12 @@ Before implementing:
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
 - If you write 200 lines and it could be 50, rewrite it.
+- Keep the implementation small, sharp, easy to understand. Try to write elegant code in a state of grace. Don't settle for the first thing that comes to mind, try to find the most minimal and better working design. Don't introduce slop: very fragile code that just patches specific cases, dead code, useless code and code ways more complicated of how it should be.
+- Comment only where the code is not obvious. 
+- Prefer comments beside the implementation over separate design documents.
+- Keep comments instructive and compact: explain the why above the what.
+
+
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
